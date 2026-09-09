@@ -31,6 +31,13 @@ def main():
     }
     print(f"文件: {os.path.basename(sys.argv[1])}  字符数: {len(t)}")
     allok = True
+    # 字数规范(2026-09): 目标带3800-5200仅提示; 硬界2500-8000
+    if 2500 <= len(t) <= 8000:
+        band = "✅" if 3800 <= len(t) <= 5200 else ("⚠偏短(目标带3800-5200)" if len(t)<3800 else "⚠超长(目标带3800-5200, 新稿样板可至6000-7000)")
+        print(f"{band} 字数: {len(t)} 字")
+    else:
+        print(f"FAIL 字数规范: {len(t)} 字 (硬界 2500-8000)")
+        allok = False
     for k, v in checks.items():
         print(("PASS " if v else "FAIL ") + k)
         allok = allok and v
