@@ -81,6 +81,12 @@ def build_parser() -> argparse.ArgumentParser:
                         help="参考片段终点秒；None=整段")
     parser.add_argument("--speed", type=float, default=1.0)
     parser.add_argument("--seed-base", type=int, default=20260912)
+    parser.add_argument("--reuse-segments", action="store_true",
+                        help="跳过合成,直接用 配音/segments 里已生成的段落音频按当前停顿参数重新拼接")
+    parser.add_argument("--scene-ends", default="",
+                        help="剧情场景边界=段落号(1起)逗号分隔;该段之后插入场景停顿,如 '7,16,32'")
+    parser.add_argument("--scene-gap", type=float, default=1.0,
+                        help="剧情场景之间的停顿秒数(2026-09-12 用户定版 1.0)")
     parser.add_argument("--threads", type=int, default=min(os.cpu_count() or 1, 16))
     parser.add_argument("--silence-threshold-db", type=float, default=-46.0,
                         help="首尾修剪用的静音阈值")
@@ -92,8 +98,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-long-pause", type=float, default=0.05,
                         help="≥此秒数的语句间隙整段替换为纯静音(呼吸消除);更短的词内停顿原样保留")
     parser.add_argument("--target-pause", type=float, default=0.18)
-    parser.add_argument("--paragraph-gap", type=float, default=1.0,
-                        help="自然段落之间静音秒数(2026-09-12 用户定版 1.0)")
+    parser.add_argument("--paragraph-gap", type=float, default=0.35,
+                        help="场景内自然段之间的节奏停顿秒数;剧情场景边界用 --scene-gap")
     return parser
 
 
@@ -150,6 +156,9 @@ def main() -> int:
         raise SystemExit("--speed must be positive")
     if args.target_pause <= 0:
         raise SystemExit("--target-pause must be positive")
+    scene_ends = {int(x) for x in args.scene_ends.split(",") if x.strip()}
+    if scene_ends and (min(scene_ends) < 1 or max(scene_ends) > 100000):
+        raise SystemExit("--scene-ends paragraph numbers out of range")
 
     os.chdir(root)
     sys.path.insert(0, str(root))
@@ -157,10 +166,10 @@ def main() -> int:
 
     import numpy as np
     import soundfile as sf
-    import torch
     from scipy.ndimage import uniform_filter1d
-
-    from GPT_SoVITS.TTS_infer_pack.TTS import TTS, TTS_Config
+    if not args.reuse_segments:
+        import torch
+        from GPT_SoVITS.TTS_infer_pack.TTS import TTS, TTS_Config
 
     output_dir.mkdir(parents=True, exist_ok=True)
     segments_dir = output_dir / "segments"
@@ -177,7 +186,9 @@ def main() -> int:
         with progress_path.open("a", encoding="utf-8") as handle:
             handle.write(line + "\n")
 
-    reference_clip = prepare_reference(reference, output_dir, args.ref_start, args.ref_end, log)
+    reference_clip = None
+    if not args.reuse_segments:
+        reference_clip = prepare_reference(reference, output_dir, args.ref_start, args.ref_end, log)
 
     def silence_envelope(audio_pcm16: np.ndarray, sample_rate: int) -> np.ndarray:
         data = audio_pcm16.astype(np.float32) / 32768.0
@@ -250,7 +261,6 @@ def main() -> int:
         "text": str(text_path),
         "normalized_text": str(normalized_path),
         "reference": str(reference),
-        "reference_clip": str(reference_clip),
         "ref_start_sec": args.ref_start,
         "ref_end_sec": args.ref_end,
         "prompt_text": args.prompt_text,
@@ -265,24 +275,29 @@ def main() -> int:
         "min_long_pause_sec": args.min_long_pause,
         "target_pause_sec": args.target_pause,
         "paragraph_gap_sec": args.paragraph_gap,
+        "scene_ends": sorted(scene_ends),
+        "scene_gap_sec": args.scene_gap,
         "breath_removal": "replace_gap_with_silence",
         "tone_beautification": False,
     }
+    if args.reuse_segments:
+        config_record["reuse_segments"] = True
     (output_dir / "配音配置.json").write_text(
         json.dumps(config_record, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
     threads = max(1, min(args.threads, os.cpu_count() or 1))
-    torch.set_num_threads(threads)
-    torch.set_num_interop_threads(max(1, min(4, threads)))
-    log(f"CPU-only; speed={args.speed:.2f}; no tone post-processing; threads={threads}")
     log(f"Loaded {len(paragraphs)} paragraphs; lengths={[len(p) for p in paragraphs]}")
-
-    config = TTS_Config(str(root / "GPT_SoVITS" / "configs" / "tts_infer.yaml"))
-    if str(config.device) != "cpu":
-        raise RuntimeError(f"Expected CPU config, got {config.device}")
-    pipeline = TTS(config)
-    log(f"Models loaded on {config.device}; version={config.version}")
+    pipeline = None
+    if not args.reuse_segments:
+        torch.set_num_threads(threads)
+        torch.set_num_interop_threads(max(1, min(4, threads)))
+        log(f"CPU-only; speed={args.speed:.2f}; no tone post-processing; threads={threads}")
+        config = TTS_Config(str(root / "GPT_SoVITS" / "configs" / "tts_infer.yaml"))
+        if str(config.device) != "cpu":
+            raise RuntimeError(f"Expected CPU config, got {config.device}")
+        pipeline = TTS(config)
+        log(f"Models loaded on {config.device}; version={config.version}")
 
     raw_paragraphs: list[np.ndarray | None] = [None] * len(paragraphs)
     processed_paragraphs: list[np.ndarray | None] = [None] * len(paragraphs)
@@ -291,7 +306,25 @@ def main() -> int:
     total_shortened = 0
     total_removed = 0.0
     started = time.time()
+    if args.reuse_segments:
+        log("Reusing existing segments; skipping synthesis")
     for index, paragraph in enumerate(paragraphs, start=1):
+        if args.reuse_segments:
+            seg_path = segments_dir / f"paragraph_{index:02d}_processed.wav"
+            raw_seg_path = segments_dir / f"paragraph_{index:02d}_raw.wav"
+            if not seg_path.is_file() or not raw_seg_path.is_file():
+                raise SystemExit(f"--reuse-segments: missing {seg_path.name}/{raw_seg_path.name}; run synthesis first")
+            processed, current_rate = sf.read(str(seg_path), dtype="int16")
+            raw_audio, raw_rate = sf.read(str(raw_seg_path), dtype="int16")
+            if raw_rate != current_rate:
+                raise RuntimeError("Sample rate mismatch between raw and processed segments")
+            if sample_rate == 0:
+                sample_rate = int(current_rate)
+            elif sample_rate != int(current_rate):
+                raise RuntimeError("Sample rate mismatch")
+            raw_paragraphs[index - 1] = raw_audio
+            processed_paragraphs[index - 1] = processed
+            continue
         log(f"Paragraph {index}/{len(paragraphs)} synthesis started ({len(paragraph)} characters)")
         request = {
             "text": paragraph,
@@ -347,7 +380,8 @@ def main() -> int:
         )
 
     raw_gap = np.zeros(int(0.26 * sample_rate), dtype=np.int16)
-    final_gap = np.zeros(int(args.paragraph_gap * sample_rate), dtype=np.int16)
+    para_gap = np.zeros(int(args.paragraph_gap * sample_rate), dtype=np.int16)
+    scene_gap = np.zeros(int(args.scene_gap * sample_rate), dtype=np.int16)
     final_speech_gap = np.zeros(int(0.5 * sample_rate), dtype=np.int16)
     raw_pieces: list[np.ndarray] = []
     final_pieces: list[np.ndarray] = []
@@ -364,7 +398,8 @@ def main() -> int:
         final_pieces.append(processed_i)
         if appended < len(paragraphs) - len(failed_paragraphs):
             raw_pieces.append(raw_gap)
-            final_pieces.append(final_gap)
+            next_index = index + 1  # 1-based
+            final_pieces.append(scene_gap if next_index in scene_ends else para_gap)
 
     if appended == 0:
         log("FINAL aborted; every paragraph failed")
