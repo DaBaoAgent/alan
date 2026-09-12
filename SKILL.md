@@ -1,6 +1,6 @@
 ---
 name: alan
-description: 选片/写解说稿/查重时用：艾伦全网首发恐怖片全流程+63部已解说库+文风规范。
+description: 选片/写解说稿/查重/配音时用：艾伦全网首发恐怖片全流程+82部已解说库+文风规范+GPT-SoVITS克隆音色配音。
 version: 1.0.0
 author: 大宝
 tags: [movie, commentary, giallo, horror, bilibili, douyin, voiceover]
@@ -76,6 +76,13 @@ B站/抖音电影解说 UP主「艾伦」的全流程技能：选片 → 已解�
 
 ## 三、自动工作流
 
+### 配音流（用户说"配音/合成语音/克隆音色读稿"）
+1. 跑 `scripts/synthesize_alan_cpu.py`（GPT-SoVITS CPU 克隆艾伦音色,dabao3 参考片段自动精修,
+   默认语速 1.0）——完整契约见 `references/voiceover-workflow.md`
+2. 质检门禁:格式/削波自动检查 + 开头 2–5 秒单独复听 + ASR 回听逐句核对
+   （判错标准=拼音显著偏离;同音/近音字差异是 ASR 误听不是 TTS 错读）
+3. 成品命名 `<片名>_艾伦音色_CPU_大段落_1.0倍速_句间停顿缩短.wav`,写在配音稿同目录
+
 ### 选片流（用户说"帮我选片/推荐"）
 1. 跑 `python scripts/check_done.py "候选片名"` 查已解说库（支持中/英/别名模糊匹配）
 2. 候选池批量过滤：`python scripts/select_next.py <candidate.json>`（读候选池，剔除已解说，输出可做清单）
@@ -106,7 +113,9 @@ B站/抖音电影解说 UP主「艾伦」的全流程技能：选片 → 已解�
 
 ## 参考文件
 
-- `scripts/done_movies.json` — 已解说 63 部电影索引（中/英名、年份、导演、女主）
+- `scripts/done_movies.json` — 已解说 82 部电影索引（中/英名、年份、导演、女主）
 - `scripts/check_done.py` — 查重脚本
 - `scripts/select_next.py` — 候选池过滤脚本
 - `scripts/validate_script.py` — 稿子结构校验脚本
+- `scripts/synthesize_alan_cpu.py` — GPT-SoVITS 克隆音色配音（艾伦音色,语速默认 1.0）
+- `references/voiceover-workflow.md` — 配音流完整契约（参考音色/质检门禁/换音色）
