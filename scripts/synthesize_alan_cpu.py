@@ -63,6 +63,16 @@ def load_paragraphs(path: Path) -> list[str]:
     return paragraphs
 
 
+def normalize_for_tts(paragraph: str, keep_dots: bool = False) -> str:
+    """朗读规则(2026-09-12 用户定版):人名间隔号去掉连读(杰米·李·柯蒂斯→杰米李柯蒂斯);
+    相邻书名号《》《》之间补顿号作停顿锚点(否则两个片名粘一起)。只影响 TTS 输入,不改原稿。"""
+    text = paragraph
+    if not keep_dots:
+        text = re.sub(r"[·‧・•]", "", text)
+    text = text.replace("》《", "》、《")
+    return text
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="CPU-only Alan narration with the cloned dabao3 voice.")
     parser.add_argument("--text", required=True, type=Path)
@@ -83,6 +93,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed-base", type=int, default=20260912)
     parser.add_argument("--reuse-segments", action="store_true",
                         help="跳过合成,直接用 配音/segments 里已生成的段落音频按当前停顿参数重新拼接")
+    parser.add_argument("--only", default="",
+                        help="只合成这些段落号(1起,逗号分隔);其余段落从 配音/segments 复用")
+    parser.add_argument("--keep-dots", action="store_true",
+                        help="保留人名间隔号·(默认去掉,按 2026-09-12 定版连读)")
     parser.add_argument("--scene-ends", default="",
                         help="剧情场景边界=段落号(1起)逗号分隔;该段之后插入场景停顿,如 '7,16,32'")
     parser.add_argument("--scene-gap", type=float, default=1.0,
@@ -159,6 +173,11 @@ def main() -> int:
     scene_ends = {int(x) for x in args.scene_ends.split(",") if x.strip()}
     if scene_ends and (min(scene_ends) < 1 or max(scene_ends) > 100000):
         raise SystemExit("--scene-ends paragraph numbers out of range")
+    only = {int(x) for x in args.only.split(",") if x.strip()}
+    if only and (min(only) < 1 or max(only) > 100000):
+        raise SystemExit("--only paragraph numbers out of range")
+    if only and args.reuse_segments:
+        raise SystemExit("--only 与 --reuse-segments 互斥")
 
     os.chdir(root)
     sys.path.insert(0, str(root))
@@ -306,14 +325,15 @@ def main() -> int:
     total_shortened = 0
     total_removed = 0.0
     started = time.time()
+    pending = None if args.reuse_segments else (sorted(only) if only else range(1, len(paragraphs) + 1))
     if args.reuse_segments:
         log("Reusing existing segments; skipping synthesis")
     for index, paragraph in enumerate(paragraphs, start=1):
-        if args.reuse_segments:
+        if args.reuse_segments or (pending is not None and index not in pending):
             seg_path = segments_dir / f"paragraph_{index:02d}_processed.wav"
             raw_seg_path = segments_dir / f"paragraph_{index:02d}_raw.wav"
             if not seg_path.is_file() or not raw_seg_path.is_file():
-                raise SystemExit(f"--reuse-segments: missing {seg_path.name}/{raw_seg_path.name}; run synthesis first")
+                raise SystemExit(f"missing {seg_path.name}/{raw_seg_path.name}; run synthesis first")
             processed, current_rate = sf.read(str(seg_path), dtype="int16")
             raw_audio, raw_rate = sf.read(str(raw_seg_path), dtype="int16")
             if raw_rate != current_rate:
@@ -325,9 +345,10 @@ def main() -> int:
             raw_paragraphs[index - 1] = raw_audio
             processed_paragraphs[index - 1] = processed
             continue
+        text_for_tts = normalize_for_tts(paragraph, keep_dots=args.keep_dots)
         log(f"Paragraph {index}/{len(paragraphs)} synthesis started ({len(paragraph)} characters)")
         request = {
-            "text": paragraph,
+            "text": text_for_tts,
             "text_lang": "zh",
             "ref_audio_path": str(reference_clip),
             "prompt_lang": "zh",
