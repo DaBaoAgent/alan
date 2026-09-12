@@ -82,10 +82,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--speed", type=float, default=1.0)
     parser.add_argument("--seed-base", type=int, default=20260912)
     parser.add_argument("--threads", type=int, default=min(os.cpu_count() or 1, 16))
-    parser.add_argument("--silence-threshold-db", type=float, default=-46.0)
-    parser.add_argument("--min-long-pause", type=float, default=0.35)
+    parser.add_argument("--silence-threshold-db", type=float, default=-46.0,
+                        help="首尾修剪用的静音阈值")
+    parser.add_argument("--breath-threshold-db", type=float, default=-40.0,
+                        help="语句边界检测阈值;低于它的间隙内容视为呼吸/静音")
+    parser.add_argument("--min-speech-sec", type=float, default=0.10)
+    parser.add_argument("--merge-gap-sec", type=float, default=0.08,
+                        help="小于此秒数的能量凹陷并入当前语句(保护爆破音闭合期不被切洞)")
+    parser.add_argument("--min-long-pause", type=float, default=0.05,
+                        help="≥此秒数的语句间隙整段替换为纯静音(呼吸消除);更短的词内停顿原样保留")
     parser.add_argument("--target-pause", type=float, default=0.18)
-    parser.add_argument("--paragraph-gap", type=float, default=0.28)
+    parser.add_argument("--paragraph-gap", type=float, default=1.0,
+                        help="自然段落之间静音秒数(2026-09-12 用户定版 1.0)")
     return parser
 
 
@@ -140,8 +148,8 @@ def main() -> int:
         raise SystemExit(f"Reference audio does not exist: {reference}")
     if args.speed <= 0:
         raise SystemExit("--speed must be positive")
-    if not 0 < args.target_pause <= args.min_long_pause:
-        raise SystemExit("Require 0 < --target-pause <= --min-long-pause")
+    if args.target_pause <= 0:
+        raise SystemExit("--target-pause must be positive")
 
     os.chdir(root)
     sys.path.insert(0, str(root))
@@ -176,42 +184,62 @@ def main() -> int:
         window = max(1, int(sample_rate * 0.015))
         return np.sqrt(uniform_filter1d(data * data, size=window))
 
-    def shorten_long_pauses(audio: np.ndarray, sample_rate: int) -> tuple[np.ndarray, int, float]:
+    def speech_boundaries(audio: np.ndarray, sample_rate: int, threshold_db: float,
+                          min_speech_sec: float, merge_gap_sec: float) -> list[tuple[int, int]]:
+        """按能量阈值切出语句区,合并近邻;返回 [(start_sample, end_sample), ...]。"""
         envelope = silence_envelope(audio, sample_rate)
-        threshold = 10 ** (args.silence_threshold_db / 20)
-        silent = envelope < threshold
-        changes = np.diff(np.r_[False, silent, False].astype(np.int8))
+        mask = envelope >= 10 ** (threshold_db / 20)
+        changes = np.diff(np.r_[False, mask, False].astype(np.int8))
         starts = np.where(changes == 1)[0]
         ends = np.where(changes == -1)[0]
-        target_samples = int(args.target_pause * sample_rate)
-        pieces: list[np.ndarray] = []
-        cursor = 0
-        changed = 0
-        removed_samples = 0
+        # 合并被 <merge_gap_sec 间隙隔开的语句区(呼吸尾/头不拆成两句)
+        merged: list[list[int]] = []
+        min_speech = int(min_speech_sec * sample_rate)
+        merge_gap = int(merge_gap_sec * sample_rate)
         for start, end in zip(starts, ends):
-            if start == 0 or end == len(audio):
+            if end - start < min_speech:
                 continue
-            pause_samples = end - start
-            if pause_samples < int(args.min_long_pause * sample_rate):
-                continue
-            left_keep = target_samples // 2
-            right_keep = target_samples - left_keep
-            pieces.append(audio[cursor : start + left_keep])
-            pieces.append(audio[end - right_keep : end])
-            cursor = end
-            changed += 1
-            removed_samples += pause_samples - target_samples
-        pieces.append(audio[cursor:])
-        result = np.concatenate(pieces) if len(pieces) > 1 else audio
+            if merged and start - merged[-1][1] < merge_gap:
+                merged[-1][1] = end
+            else:
+                merged.append([start, end])
+        return [(start, end) for start, end in merged]
 
-        envelope = silence_envelope(result, sample_rate)
-        voiced = np.flatnonzero(envelope >= threshold)
-        if len(voiced):
-            begin = max(0, int(voiced[0]) - int(0.04 * sample_rate))
-            finish = min(len(result), int(voiced[-1]) + 1 + int(0.08 * sample_rate))
-            removed_samples += begin + len(result) - finish
-            result = result[begin:finish]
-        return result, changed, removed_samples / sample_rate
+    def remove_breaths(audio: np.ndarray, sample_rate: int) -> tuple[np.ndarray, int, float]:
+        """句间间隙处理:≥min_long_pause 的间隙整段替换为 target_pause 纯静音(消除呼吸),
+        更短的气口原样保留;首尾按 silence-threshold 修剪。"""
+        bounds = speech_boundaries(
+            audio, sample_rate, args.breath_threshold_db,
+            args.min_speech_sec, args.merge_gap_sec,
+        )
+        if not bounds:
+            return audio, 0, 0.0
+        target_samples = int(args.target_pause * sample_rate)
+        gap = int(args.min_long_pause * sample_rate)
+        pieces: list[np.ndarray] = []
+        replaced = 0
+        removed_samples = 0
+        first_start, _ = bounds[0]
+        pieces.append(audio[max(0, first_start - int(0.04 * sample_rate)) : bounds[0][0]])
+        fade = max(1, int(0.005 * sample_rate))
+        ramp = np.linspace(0.0, 1.0, fade, dtype=np.float64)
+        for index, (start, end) in enumerate(bounds):
+            piece = audio[start:end].astype(np.float64)
+            piece[:fade] *= ramp
+            piece[-fade:] *= ramp[::-1]
+            pieces.append(piece.astype(np.int16))
+            if index < len(bounds) - 1:
+                next_start = bounds[index + 1][0]
+                if next_start - end >= gap:
+                    pieces.append(np.zeros(target_samples, dtype=np.int16))
+                    removed_samples += next_start - end - target_samples
+                    replaced += 1
+                else:
+                    pieces.append(audio[end:next_start])
+        _, last_end = bounds[-1]
+        pieces.append(audio[last_end : last_end + int(0.08 * sample_rate)])
+        result = np.concatenate(pieces)
+        return result, replaced, removed_samples / sample_rate
 
     paragraphs = load_paragraphs(text_path)
     if not paragraphs:
@@ -231,9 +259,13 @@ def main() -> int:
         "text_split_method": "cut0",
         "paragraph_count": len(paragraphs),
         "silence_threshold_db": args.silence_threshold_db,
+        "breath_threshold_db": args.breath_threshold_db,
+        "min_speech_sec": args.min_speech_sec,
+        "merge_gap_sec": args.merge_gap_sec,
         "min_long_pause_sec": args.min_long_pause,
         "target_pause_sec": args.target_pause,
         "paragraph_gap_sec": args.paragraph_gap,
+        "breath_removal": "replace_gap_with_silence",
         "tone_beautification": False,
     }
     (output_dir / "配音配置.json").write_text(
@@ -292,7 +324,7 @@ def main() -> int:
 
         sf.write(segments_dir / f"paragraph_{index:02d}_raw.wav", audio, sample_rate, subtype="PCM_16")
         raw_paragraphs.append(audio)
-        processed, changed, removed = shorten_long_pauses(audio, sample_rate)
+        processed, changed, removed = remove_breaths(audio, sample_rate)
         sf.write(
             segments_dir / f"paragraph_{index:02d}_processed.wav",
             processed,
