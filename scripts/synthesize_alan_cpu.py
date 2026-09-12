@@ -284,8 +284,9 @@ def main() -> int:
     pipeline = TTS(config)
     log(f"Models loaded on {config.device}; version={config.version}")
 
-    raw_paragraphs: list[np.ndarray] = []
-    processed_paragraphs: list[np.ndarray] = []
+    raw_paragraphs: list[np.ndarray | None] = [None] * len(paragraphs)
+    processed_paragraphs: list[np.ndarray | None] = [None] * len(paragraphs)
+    failed_paragraphs: list[int] = []
     sample_rate = 0
     total_shortened = 0
     total_removed = 0.0
@@ -313,7 +314,12 @@ def main() -> int:
             "return_fragment": False,
             "streaming_mode": False,
         }
-        current_rate, audio = next(pipeline.run(request))
+        try:
+            current_rate, audio = next(pipeline.run(request))
+        except Exception as error:  # 单段失败不毁整批;末尾汇报并返回非零退出码
+            failed_paragraphs.append(index)
+            log(f"Paragraph {index}/{len(paragraphs)} FAILED: {type(error).__name__}: {error}")
+            continue
         if sample_rate == 0:
             sample_rate = current_rate
         elif sample_rate != current_rate:
@@ -323,7 +329,7 @@ def main() -> int:
             raise RuntimeError(f"Expected PCM integer output, got {audio.dtype}")
 
         sf.write(segments_dir / f"paragraph_{index:02d}_raw.wav", audio, sample_rate, subtype="PCM_16")
-        raw_paragraphs.append(audio)
+        raw_paragraphs[index - 1] = audio
         processed, changed, removed = remove_breaths(audio, sample_rate)
         sf.write(
             segments_dir / f"paragraph_{index:02d}_processed.wav",
@@ -331,7 +337,7 @@ def main() -> int:
             sample_rate,
             subtype="PCM_16",
         )
-        processed_paragraphs.append(processed)
+        processed_paragraphs[index - 1] = processed
         total_shortened += changed
         total_removed += removed
         log(
@@ -342,15 +348,32 @@ def main() -> int:
 
     raw_gap = np.zeros(int(0.26 * sample_rate), dtype=np.int16)
     final_gap = np.zeros(int(args.paragraph_gap * sample_rate), dtype=np.int16)
+    final_speech_gap = np.zeros(int(0.5 * sample_rate), dtype=np.int16)
     raw_pieces: list[np.ndarray] = []
     final_pieces: list[np.ndarray] = []
+    appended = 0
     for index in range(len(paragraphs)):
-        raw_pieces.append(raw_paragraphs[index])
-        final_pieces.append(processed_paragraphs[index])
-        if index < len(paragraphs) - 1:
+        raw_audio_i = raw_paragraphs[index]
+        processed_i = processed_paragraphs[index]
+        if raw_audio_i is None or processed_i is None:
+            continue  # 失败段跳过;拼接处降级为 0.5s 语音停顿
+        if index > 1 and (index - 1) in failed_paragraphs:
+            final_pieces.append(final_speech_gap)
+        appended += 1
+        raw_pieces.append(raw_audio_i)
+        final_pieces.append(processed_i)
+        if appended < len(paragraphs) - len(failed_paragraphs):
             raw_pieces.append(raw_gap)
             final_pieces.append(final_gap)
 
+    if appended == 0:
+        log("FINAL aborted; every paragraph failed")
+        return 1
+    if failed_paragraphs:
+        log(
+            f"WARNING: {len(failed_paragraphs)} paragraph(s) failed: {failed_paragraphs}; "
+            "output is incomplete"
+        )
     raw_audio = np.concatenate(raw_pieces)
     final_audio = np.concatenate(final_pieces)
     sf.write(raw_path, raw_audio, sample_rate, subtype="PCM_16")
@@ -364,7 +387,7 @@ def main() -> int:
     )
     if sample_rate != 32000 or final_audio.ndim != 1 or clipped != 0:
         raise RuntimeError("Final audio failed deterministic quality checks")
-    return 0
+    return 1 if failed_paragraphs else 0
 
 
 if __name__ == "__main__":
