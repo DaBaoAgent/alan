@@ -89,8 +89,8 @@ B站/抖音电影解说 UP主「艾伦」的全流程技能：选片 → 已解�
 2. 生成即梦图生图提示词: `python scripts/gen_jimeng_cover_prompts.py --movie <片名> --out <片目录>/封面/封面提示词-即梦.txt`
    —— 封面标准=金发碧眼美女主体 + **仅一个大大的手写体电影名**（无其他文字），3:4竖版+4:3横版两段。
 3. 用户在即梦用「底图 + 提示词」图生图出 2 张封面；文字出错时局部重绘或换种子重生成。
-4. 发布信息: `<片目录>/发布/发布信息.txt`（第一行标题≤25字，第二行恰好5个话题词），
-   `python scripts/validate_publication_info.py <片目录>` 校验通过才算完成。
+4. 发布信息: `<片目录>/发布信息.txt`（片目录根或 发布/ 子目录均可；第一行标题≤25字，第二行恰好5个话题词，惯例带 #艾伦和艾薇），
+   `python scripts/validate_publication_info.py <片目录> [--blocks N]` 校验通过才算完成（多平台多份时传 --blocks）。
 5. 完整契约与坑见 `references/cover-publish.md`。
 
 ### 选片流（用户说"帮我选片/推荐"）
