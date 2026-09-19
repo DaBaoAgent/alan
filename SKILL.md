@@ -1,6 +1,6 @@
 ---
 name: alan
-description: 选片/写解说稿/查重/配音时用：艾伦全网首发恐怖片全流程+82部已解说库+文风规范+GPT-SoVITS克隆音色配音。
+description: 选片/写解说稿/查重/配音/封面发布时用：艾伦全网首发恐怖片全流程+82部已解说库+文风规范+GPT-SoVITS克隆音色配音+即梦封面提示词与发布信息。
 version: 1.0.0
 author: 大宝
 tags: [movie, commentary, giallo, horror, bilibili, douyin, voiceover]
@@ -83,6 +83,16 @@ B站/抖音电影解说 UP主「艾伦」的全流程技能：选片 → 已解�
    （判错标准=拼音显著偏离;同音/近音字差异是 ASR 误听不是 TTS 错读）
 3. 成品命名 `<片名>_艾伦音色_CPU_大段落_1.0倍速_句间停顿缩短.wav`,写在配音稿同目录
 
+### 封面/发布信息流（用户说"生成封面/发布信息"；模块 2026-09 从 AutoYY 移植）
+1. 选帧: `python scripts/select_cover_frame.py <源片> --times <秒,...>` 抽候选帧并按图像统计打分；
+   **必须逐帧识图复核**（女主=金发美女优先，要脸+姿态+标题留白），人工确认最佳帧后导出高清底图。
+2. 生成即梦图生图提示词: `python scripts/gen_jimeng_cover_prompts.py --movie <片名> --out <片目录>/封面/封面提示词-即梦.txt`
+   —— 封面标准=金发碧眼美女主体 + **仅一个大大的手写体电影名**（无其他文字），3:4竖版+4:3横版两段。
+3. 用户在即梦用「底图 + 提示词」图生图出 2 张封面；文字出错时局部重绘或换种子重生成。
+4. 发布信息: `<片目录>/发布/发布信息.txt`（第一行标题≤25字，第二行恰好5个话题词），
+   `python scripts/validate_publication_info.py <片目录>` 校验通过才算完成。
+5. 完整契约与坑见 `references/cover-publish.md`。
+
 ### 选片流（用户说"帮我选片/推荐"）
 1. 跑 `python scripts/check_done.py "候选片名"` 查已解说库（支持中/英/别名模糊匹配）
 2. 候选池批量过滤：`python scripts/select_next.py <candidate.json>`（读候选池，剔除已解说，输出可做清单）
@@ -119,3 +129,7 @@ B站/抖音电影解说 UP主「艾伦」的全流程技能：选片 → 已解�
 - `scripts/validate_script.py` — 稿子结构校验脚本
 - `scripts/synthesize_alan_cpu.py` — GPT-SoVITS 克隆音色配音（艾伦音色,语速默认 1.0）
 - `references/voiceover-workflow.md` — 配音流完整契约（参考音色/质检门禁/换音色）
+- `scripts/select_cover_frame.py` — 封面选帧（抽帧 + 图像统计打分）
+- `scripts/gen_jimeng_cover_prompts.py` — 即梦图生图封面提示词生成（3:4 + 4:3 两段）
+- `scripts/validate_publication_info.py` — 发布信息校验（标题≤25字 + 恰好5个话题词）
+- `references/cover-publish.md` — 封面/发布信息流完整契约（即梦用法/底图标准/坑）
