@@ -1,6 +1,6 @@
 ---
 name: alan
-description: 选片/写解说稿/查重/配音/封面发布时用：艾伦全网首发恐怖片全流程+82部已解说库+文风规范+GPT-SoVITS克隆音色配音+即梦封面提示词与发布信息。
+description: 选片/写解说稿/查重/VoiceStudio配音/自动剪辑/封面发布时用：艾伦全网首发恐怖片全流程+82部已解说库+文风规范+即梦封面提示词与发布信息。
 version: 1.0.0
 author: 大宝
 tags: [movie, commentary, giallo, horror, bilibili, douyin, voiceover]
@@ -77,11 +77,16 @@ B站/抖音电影解说 UP主「艾伦」的全流程技能：选片 → 已解�
 ## 三、自动工作流
 
 ### 配音流（用户说"配音/合成语音/克隆音色读稿"）
-1. 跑 `scripts/synthesize_alan_cpu.py`（GPT-SoVITS CPU 克隆艾伦音色,dabao3 参考片段自动精修,
-   默认语速 1.0）——完整契约见 `references/voiceover-workflow.md`
-2. 质检门禁:格式/削波自动检查 + 开头 2–5 秒单独复听 + ASR 回听逐句核对
-   （判错标准=拼音显著偏离;同音/近音字差异是 ASR 误听不是 TTS 错读）
-3. 成品命名 `<片名>_艾伦音色_CPU_大段落_1.0倍速_句间停顿缩短.wav`,写在配音稿同目录
+1. 运行 `python scripts/voicestudio_alan.py health`，只连接正在本机运行的 VoiceStudio。
+2. 首次运行 `clone --work-dir <项目>/音色`，默认使用用户指定的 `D:\BaiduSyncdisk\4 @数字人剪辑\大宝Agent\大宝1.1.mp3` 创建 profile；profile ID 不写入 Git。
+3. 用 `synthesize --voice <profile-id> --text <稿> --output <项目>/配音/大宝解说.wav` 配音；必须检查生成的 `*.quality.json`，并完成开头 20 秒试听和 ASR 回听。
+4. 完整契约见 `references/voicestudio-workflow.md`；若要换音色，创建新 profile，不对既有成片强行变调。
+
+### 自动剪辑流（用户说"自动剪辑/解说成片"）
+1. 只对用户有权使用的原片和 SRT 工作。先用 `auto_edit_movie.py detect-scenes` 生成 PySceneDetect 镜头边界。
+2. 用 `first-cut` 生成按剧情时间顺序的 `初剪计划.json`。它是 EDL，不等于已审核成片。
+3. 逐条核对镜头是否匹配解说稿，将 `approved` 设为 `true`，再运行 `render` 混合 VoiceStudio 解说、解说字幕并导出 MP4。
+4. 完整契约见 `references/auto-edit-workflow.md`；只为内部试看才允许 `--allow-unreviewed`。
 
 ### 封面/发布信息流（用户说"生成封面/发布信息"；模块 2026-09 从 AutoYY 移植）
 1. 选帧: `python scripts/select_cover_frame.py <源片> --times <秒,...>` 抽候选帧并按图像统计打分；
@@ -127,8 +132,10 @@ B站/抖音电影解说 UP主「艾伦」的全流程技能：选片 → 已解�
 - `scripts/check_done.py` — 查重脚本
 - `scripts/select_next.py` — 候选池过滤脚本
 - `scripts/validate_script.py` — 稿子结构校验脚本
-- `scripts/synthesize_alan_cpu.py` — GPT-SoVITS 克隆音色配音（艾伦音色,语速默认 1.0）
-- `references/voiceover-workflow.md` — 配音流完整契约（参考音色/质检门禁/换音色）
+- `scripts/voicestudio_alan.py` — VoiceStudio 本地克隆 profile、分段配音与音频质检
+- `scripts/auto_edit_movie.py` — PySceneDetect 镜头检测、初剪 EDL 与 FFmpeg 成片渲染
+- `references/voicestudio-workflow.md` — VoiceStudio 配音完整契约（参考音色/试听/质检/换音色）
+- `references/auto-edit-workflow.md` — 从授权原片与 SRT 到成片、封面和发布信息的完整工作流
 - `scripts/select_cover_frame.py` — 封面选帧（抽帧 + 图像统计打分）
 - `scripts/gen_jimeng_cover_prompts.py` — 即梦图生图封面提示词生成（3:4 + 4:3 两段）
 - `scripts/validate_publication_info.py` — 发布信息校验（标题≤25字 + 恰好5个话题词）

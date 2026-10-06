@@ -32,6 +32,7 @@ B站/抖音电影解说 UP 主「艾伦」的全流程技能：**选片 → 已�
 | "写解说稿 / 按艾伦风格写一篇" | 写稿流 |
 | "这部片艾伦解说过吗" | 查重 |
 | "配音 / 合成语音 / 克隆音色读稿" | 配音流 |
+| "自动剪辑 / 解说成片" | 自动剪辑流 |
 | "生成封面 / 发布信息" | 封面发布流 |
 
 ---
@@ -98,10 +99,23 @@ python scripts/validate_script.py <稿.txt>   # 校验 6 件套 + 签名格式 +
 ### 配音流
 
 ```bash
-python scripts/synthesize_alan_cpu.py   # GPT-SoVITS CPU 克隆艾伦音色，默认语速 1.0
+python scripts/voicestudio_alan.py health
+python scripts/voicestudio_alan.py clone --work-dir "<项目>/音色"
+python scripts/voicestudio_alan.py synthesize --voice "<profile-id>" --text "<解说稿>" --output "<项目>/配音/大宝解说.wav"
 ```
 
-质检门禁：格式/削波自动检查 + 开头 2–5 秒单独复听 + ASR 回听逐句核对。
+VoiceStudio 本地 profile 默认使用用户指定的 `大宝1.1.mp3` 创建；每次配音都会输出格式、声道和峰值质检记录。完整步骤见 `references/voicestudio-workflow.md`。
+
+### 自动剪辑成片
+
+```bash
+python -m pip install -r requirements-movie-edit.txt
+python scripts/auto_edit_movie.py detect-scenes --video "<原片>" --output "<项目>/剪辑/镜头.json"
+python scripts/auto_edit_movie.py first-cut --source-video "<原片>" --narration "<配音>" --scenes "<项目>/剪辑/镜头.json" --output "<项目>/剪辑/初剪计划.json"
+python scripts/auto_edit_movie.py render --plan "<项目>/剪辑/初剪计划.json" --subtitle "<项目>/字幕/解说字幕.srt" --output "<项目>/成片/片名_解说.mp4"
+```
+
+初剪由 PySceneDetect 识别镜头边界，再按剧情顺序生成 EDL；正式渲染前必须逐条审核镜头，避免画面语义错配。完整步骤见 `references/auto-edit-workflow.md`。
 
 ### 封面 / 发布信息流
 
@@ -123,11 +137,13 @@ python scripts/validate_publication_info.py <片目录>            # 标题≤25
 | `scripts/check_done.py` | 查重脚本 |
 | `scripts/select_next.py` | 候选池过滤脚本 |
 | `scripts/validate_script.py` | 稿子结构校验脚本 |
-| `scripts/synthesize_alan_cpu.py` | GPT-SoVITS 克隆音色配音 |
+| `scripts/voicestudio_alan.py` | VoiceStudio 本地克隆 profile、长稿配音与音频质检 |
+| `scripts/auto_edit_movie.py` | PySceneDetect 镜头检测、可审核初剪计划与 FFmpeg 成片渲染 |
 | `scripts/select_cover_frame.py` | 封面选帧（抽帧 + 图像统计打分） |
 | `scripts/gen_jimeng_cover_prompts.py` | 即梦图生图封面提示词生成 |
 | `scripts/validate_publication_info.py` | 发布信息校验 |
-| `references/voiceover-workflow.md` | 配音流完整契约 |
+| `references/voicestudio-workflow.md` | VoiceStudio 克隆音色、试听和质检流程 |
+| `references/auto-edit-workflow.md` | 原片/SRT/脚本/配音/剪辑/成片/封面/发布的全流程 |
 | `references/cover-publish.md` | 封面/发布信息流完整契约 |
 
 完整规则见 [`SKILL.md`](SKILL.md)。

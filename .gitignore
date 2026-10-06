@@ -1,2 +1,6 @@
 __pycache__/
 *.pyc
+*.quality.json
+voicestudio-profile.json
+*_segments/
+vendor/
