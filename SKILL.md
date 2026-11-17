@@ -9,7 +9,7 @@ platforms: [windows, linux, macos]
 
 # Alan 电影解说技能
 
-B站/抖音电影解说 UP主「艾伦」的全流程技能：选片 → 已解说库查重 → 写口播稿 → 校验。
+B站/抖音电影解说 UP主「艾伦」的全流程技能：选片 → 已解说库查重 → 写口播稿 → 配音 → 剪辑成片。
 频道定位：**全网首发**冷门经典恐怖/铅黄(Giallo)/剥削(B级)片，目标 200 部全网首发。
 文风与选片标准全部从艾伦亲笔的 63 篇解说稿（D:\自动剪辑\alan解说\艾伦和艾薇解说稿\）逐条提炼。
 
@@ -18,6 +18,7 @@ B站/抖音电影解说 UP主「艾伦」的全流程技能：选片 → 已解�
 - "帮我选片 / 推荐一部没解说过的恐怖片"（选片流）
 - "写解说稿 / 按艾伦风格写一篇"（写稿流）
 - "这部片艾伦解说过吗"（查重）
+- "剪辑 / 配画面 / 把这篇稿做成成片"（剪辑流）
 - 任何"全网首发/铅黄/冷门老片解说"相关任务
 
 ## 一、选片标准（艾伦亲述 + 63篇归纳）
@@ -83,7 +84,22 @@ B站/抖音电影解说 UP主「艾伦」的全流程技能：选片 → 已解�
    （判错标准=拼音显著偏离;同音/近音字差异是 ASR 误听不是 TTS 错读）
 3. 成品命名 `<片名>_艾伦音色_CPU_大段落_1.0倍速_句间停顿缩短.wav`,写在配音稿同目录
 
-### 封面/发布信息流（用户说"生成封面/发布信息"；模块 2026-09 从 AutoYY 移植）
+### 剪辑流（用户说"剪辑/配画面/把解说做成片/出成片"）
+输入三件：定稿口播稿 + 配音.wav + 原片.mp4，统一放 `films/<片名>/`（`init` 会建好并硬链接素材）。
+1. `python scripts/edit/alan_edit.py init --name <片名> --script <稿.txt> --video <原片.mp4>` 建片目录
+2. 一键：`python scripts/edit/alan_edit.py all --work "<片目录>" --backend peiyin --run`
+   分步：`script → voice → align → shots → match → render`，每步可单独重跑
+3. 配音默认调**外部 PeiYin 项目**（dabao 克隆音色）；`--backend alan` 退回本地 GPT-SoVITS；
+   `none` 表示配音已存在只做校验
+4. 对齐自动降级 `whisperx > faster-whisper > rough`；**rough 只用于跑通结构**，
+   ±0.5s 以上会漂移，正式出片必须装 ASR（`pip install faster-whisper`）
+5. 画面匹配分三档 `embed / keyword / temporal`，`build/edl.json` 的 `stats.scorer` 写明实际档位；
+   要"精准配画面"必须先给镜头补描述：`shots --caption-backend openai`
+6. 成片由 `vendor/ffmpeg-skill` 执行；`build/project.json` 可手改返工；
+   加 `--export-timeline` 导出 fcpxml 进 Premiere/Resolve
+完整契约与精度说明见 `references/edit-pipeline.md`。
+
+
 1. 选帧: `python scripts/select_cover_frame.py <源片> --times <秒,...>` 抽候选帧并按图像统计打分；
    **必须逐帧识图复核**（女主=金发美女优先，要脸+姿态+标题留白），人工确认最佳帧后导出高清底图。
 2. 生成即梦图生图提示词: `python scripts/gen_jimeng_cover_prompts.py --movie <片名> --out <片目录>/封面/封面提示词-即梦.txt`
@@ -117,8 +133,8 @@ B站/抖音电影解说 UP主「艾伦」的全流程技能：选片 → 已解�
 
 - [ ] `check_done.py` 查重通过（不在 63 部已解说库）
 - [ ] 女主颜值/身材卖点明确（选片流）
-- [ ] 6件套齐全：钩子→信息段→正片→"好则 电影结束"→点评→签名
-- [ ] 签名格式："我是艾伦 一个[梗]的阿婆 好则 偶要去遛狗则 明朝会"
+- [ ] 6件套齐全：钩子→信息段→正片→"好了 电影结束"→点评→签名
+- [ ] 签名格式："我是艾伦 一个[梗]的阿婆 好了 我要去遛狗了 下期更精彩哦"
 - [ ] 年份/导演/演员真实可查
 
 ## 参考文件
@@ -133,3 +149,8 @@ B站/抖音电影解说 UP主「艾伦」的全流程技能：选片 → 已解�
 - `scripts/gen_jimeng_cover_prompts.py` — 即梦图生图封面提示词生成（3:4 + 4:3 两段）
 - `scripts/validate_publication_info.py` — 发布信息校验（标题≤25字 + 恰好5个话题词）
 - `references/cover-publish.md` — 封面/发布信息流完整契约（即梦用法/底图标准/坑）
+- `scripts/edit/alan_edit.py` — 剪辑流水线统一入口（init/script/voice/align/shots/match/render/all/status）
+- `scripts/edit/{read_script,align_voice,shot_table,match_edl,render_edl,voiceover}.py` — 剪辑六步
+- `references/edit-pipeline.md` — 剪辑流完整契约（算法血统/长句拆槽/三档精度/已知限制）
+- `vendor/ffmpeg-skill` — 剪辑执行层（MIT，commit 见 `vendor/README.md`）
+- `vendor/movie-narrator` — 匹配算法参考（AGPL-3.0，只借鉴实现未复制代码）
