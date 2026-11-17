@@ -22,14 +22,14 @@ if not __package__:
     from common import (  # noqa: E402
         ALAN_ROOT, FILMS_DIR, build_dir, ensure_dir, read_json, write_json,
     )
-    import read_script, voiceover, align_voice, shot_table, match_edl, render_edl  # noqa: E402
+    import read_script, voiceover, align_voice, shot_table, match_edl, render_edl, publish  # noqa: E402
 else:
     from .common import (  # noqa: E402
         ALAN_ROOT, FILMS_DIR, build_dir, ensure_dir, read_json, write_json,
     )
-    from . import read_script, voiceover, align_voice, shot_table, match_edl, render_edl  # noqa: E402
+    from . import read_script, voiceover, align_voice, shot_table, match_edl, render_edl, publish  # noqa: E402
 
-STEP_ORDER = ("script", "voice", "align", "shots", "match", "render")
+STEP_ORDER = ("script", "voice", "align", "shots", "match", "render", "cover")
 
 
 def _place(src: Path, dst: Path) -> str:
@@ -153,6 +153,8 @@ def run_all(args) -> int:
             if args.run:
                 argv.append("--run")
             render_edl.main(argv)
+        elif step == "cover":
+            publish.main(["--work", str(work)])
     return 0
 
 
@@ -189,10 +191,12 @@ def main(argv: list[str] | None = None) -> int:
         return match_edl.main(rest)
     if cmd == "render":
         return render_edl.main(rest)
+    if cmd == "cover":
+        return publish.main(rest)
     if cmd == "all":
         ap = argparse.ArgumentParser(prog="alan_edit all")
         ap.add_argument("--work", required=True)
-        ap.add_argument("--steps", default="script,voice,align,shots,match,render")
+        ap.add_argument("--steps", default="script,voice,align,shots,match,render,cover")
         ap.add_argument("--backend", choices=["peiyin", "alan", "none"], default="peiyin")
         ap.add_argument("--align-backend", choices=["auto", "whisperx", "faster", "rough"], default="auto")
         ap.add_argument("--caption-backend", choices=["none", "openai"], default="none")
@@ -204,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
         ap.add_argument("--run", action="store_true")
         return run_all(ap.parse_args(rest))
 
-    raise SystemExit(f"未知命令 {cmd}，可用：init/script/voice/align/shots/match/render/all/status")
+    raise SystemExit(f"未知命令 {cmd}，可用：init/script/voice/align/shots/match/render/cover/all/status")
 
 
 if __name__ == "__main__":

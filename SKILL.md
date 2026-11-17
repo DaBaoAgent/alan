@@ -1,6 +1,6 @@
 ---
 name: alan
-description: 选片/写解说稿/查重/VoiceStudio配音/自动剪辑/封面发布时用：艾伦全网首发恐怖片全流程+82部已解说库+文风规范+即梦封面提示词与发布信息。
+description: 选片/写解说稿/查重/配音(PeiYin)/剪辑成片/封面发布时用：艾伦全网首发恐怖片全流程+82部已解说库+文风规范+句级画面匹配剪辑+fengmian封面与发布信息。
 version: 1.0.0
 author: 大宝
 tags: [movie, commentary, giallo, horror, bilibili, douyin, voiceover]
@@ -9,7 +9,7 @@ platforms: [windows, linux, macos]
 
 # Alan 电影解说技能
 
-B站/抖音电影解说 UP主「艾伦」的全流程技能：选片 → 已解说库查重 → 写口播稿 → 配音 → 剪辑成片。
+B站/抖音电影解说 UP主「艾伦」的全流程技能：选片 → 已解说库查重 → 写口播稿 → 配音（外部 PeiYin） → 剪辑成片（自建匹配层 + ffmpeg-skill） → 封面与发布信息（外部 fengmian）。
 频道定位：**全网首发**冷门经典恐怖/铅黄(Giallo)/剥削(B级)片，目标 200 部全网首发。
 文风与选片标准全部从艾伦亲笔的 63 篇解说稿（D:\自动剪辑\alan解说\艾伦和艾薇解说稿\）逐条提炼。
 
@@ -78,20 +78,19 @@ B站/抖音电影解说 UP主「艾伦」的全流程技能：选片 → 已解�
 ## 三、自动工作流
 
 ### 配音流（用户说"配音/合成语音/克隆音色读稿"）
-**默认走外部 PeiYin 项目**（dabao 克隆音色，停顿/门禁都在那边）：
-`python scripts/edit/alan_edit.py voice --work "<片目录>" --backend peiyin`，
-产物固定为 `<片目录>/配音.wav`，可直接进剪辑流。以下 VoiceStudio / 本地 GPT-SoVITS 为备选。
+**默认直接调 PeiYin 的 dianying 管线**（dabao 克隆音色，参数与阅读规则全在那边）：
 
-1. 运行 `python scripts/voicestudio_alan.py health`，只连接正在本机运行的 VoiceStudio。
-2. 首次运行 `clone --work-dir <项目>/音色`，默认使用用户指定的 `D:\BaiduSyncdisk\4 @数字人剪辑\大宝Agent\大宝1.1.mp3` 创建 profile；profile ID 不写入 Git。
-3. 用 `synthesize --voice <profile-id> --text <稿> --output <项目>/配音/大宝解说.wav` 配音；必须检查生成的 `*.quality.json`，并完成开头 20 秒试听和 ASR 回听。
-4. 完整契约见 `references/voicestudio-workflow.md`；若要换音色，创建新 profile，不对既有成片强行变调。
+`python scripts/edit/alan_edit.py voice --work "<片目录>" --backend peiyin`
 
-### 自动剪辑流（用户说"自动剪辑/解说成片"）
-1. 只对用户有权使用的原片和 SRT 工作。先用 `auto_edit_movie.py detect-scenes` 生成 PySceneDetect 镜头边界。
-2. 用 `first-cut` 生成按剧情时间顺序的 `初剪计划.json`。它是 EDL，不等于已审核成片。
-3. 逐条核对镜头是否匹配解说稿，将 `approved` 设为 `true`，再运行 `render` 混合 VoiceStudio 解说、解说字幕并导出 MP4。
-4. 完整契约见 `references/auto-edit-workflow.md`；只为内部试看才允许 `--allow-unreviewed`。
+产物固定为 `<片目录>/配音.wav`，可直接进剪辑流。生效参数（v5turbo / speed 1.0 / temp 0.9 / top_p 0.9 / top_k 20 / rep 1.3 / fragment 0.2 / 段 150 字 / 句间 100ms / 门 -33dB）写在 `build/voice.json`，别在 Alan 侧另设。
+
+**读法三条（改稿时就遵守）**：数字写中文；外国人名照写「·」，合成前自动去点连读（`马里奥·巴瓦`→`马里奥巴瓦`），不要把去点后的名字写进稿；段首/段尾独立短句（「先交代一下背景。」「重头戏在这儿。」）要改逗号并句，否则被吞。
+
+**交付前核对**：读 `build/voice_peiyin.json` 的 `chunks[].spoken`，确认无「·」残留、人名连续；段落字数与时长比对，明显偏短即被吞。需要长片分节停顿加 `--paragraph-gap-ms 200`（段落模式）。完整契约见 `references/peiyin-voice-contract.md`。
+
+本地 GPT-SoVITS（`--backend alan`）只作离线退路：`scripts/synthesize_alan_cpu.py` 走 CPU 克隆，语速固定 1.0，契约见 `references/voiceover-workflow.md`。
+
+### 剪辑流（用户说"剪辑/配画面/把解说做成片/出成片"）
 
 ### 剪辑流（用户说"剪辑/配画面/把解说做成片/出成片"）
 输入三件：定稿口播稿 + 配音.wav + 原片.mp4，统一放 `films/<片名>/`（`init` 会建好并硬链接素材）。
@@ -108,15 +107,18 @@ B站/抖音电影解说 UP主「艾伦」的全流程技能：选片 → 已解�
    加 `--export-timeline` 导出 fcpxml 进 Premiere/Resolve
 完整契约与精度说明见 `references/edit-pipeline.md`。
 
-### 封面/发布信息流（用户说"生成封面/发布信息"；模块 2026-09 从 AutoYY 移植）
-1. 选帧: `python scripts/select_cover_frame.py <源片> --times <秒,...>` 抽候选帧并按图像统计打分；
-   **必须逐帧识图复核**（女主=金发美女优先，要脸+姿态+标题留白），人工确认最佳帧后导出高清底图。
-2. 生成即梦图生图提示词: `python scripts/gen_jimeng_cover_prompts.py --movie <片名> --out <片目录>/封面/封面提示词-即梦.txt`
-   —— 封面标准=金发碧眼美女主体 + **仅一个大大的手写体电影名**（无其他文字），3:4竖版+4:3横版两段。
-3. 用户在即梦用「底图 + 提示词」图生图出 2 张封面；文字出错时局部重绘或换种子重生成。
-4. 发布信息: `<片目录>/发布信息.txt`（片目录根或 发布/ 子目录均可；第一行标题≤25字，第二行恰好5个话题词，惯例带 #艾伦和艾薇），
-   `python scripts/validate_publication_info.py <片目录> [--blocks N]` 校验通过才算完成（多平台多份时传 --blocks）。
-5. 完整契约与坑见 `references/cover-publish.md`。
+### 封面/发布信息流（用户说"生成封面/发布信息"）
+最后一环交给外部 `fengmian` 项目（`vendor/fengmian`，由 `scripts/edit/publish.py` 封装）。
+1. 先看抽取结果：`python scripts/edit/publish.py --work "<片目录>" --analyze`
+   —— 输出建议主标 / 副标 / 话题 / 钩子 / 数字。
+2. 定稿出提示词与发布信息（**主标恰好 6 字、副标恰好 8 字**，不符只会出发布信息）：
+   `python scripts/edit/publish.py --work "<片目录>" --main "<6字>" --sub "<8字>" --title "<前段：后段>" --tags "#a #b #c #d"`
+   产物：`发布信息.txt` 与（出图后）`封面-4比3.png` / `封面-3比4.png` 在片目录根，
+   提示词与元信息在 `build/`。
+3. 出图：配 `ARK_API_KEY` 时 `--covers ark` 直出 2048×1536 / 1536×2048；否则拿 `build/` 里的提示词走即梦。
+4. 发布信息硬校验：标题两段式 ≤25 字含阿拉伯数字 + **恰好 4 个话题**（旧 `validate_publication_info.py` 的 5 话题规则已不用了）。
+5. 交付门禁：片根只允许成片 + 两张正式封面 + `发布信息.txt` + 子目录；残留的提示词/cover 图会被拦。
+   规格细节见 `vendor/fengmian/README.md`。
 
 ### 选片流（用户说"帮我选片/推荐"）
 1. 跑 `python scripts/check_done.py "候选片名"` 查已解说库（支持中/英/别名模糊匹配）
@@ -152,16 +154,20 @@ B站/抖音电影解说 UP主「艾伦」的全流程技能：选片 → 已解�
 - `scripts/check_done.py` — 查重脚本
 - `scripts/select_next.py` — 候选池过滤脚本
 - `scripts/validate_script.py` — 稿子结构校验脚本
-- `scripts/voicestudio_alan.py` — VoiceStudio 本地克隆 profile、分段配音与音频质检
-- `scripts/auto_edit_movie.py` — PySceneDetect 镜头检测、初剪 EDL 与 FFmpeg 成片渲染
-- `references/voicestudio-workflow.md` — VoiceStudio 配音完整契约（参考音色/试听/质检/换音色）
-- `references/auto-edit-workflow.md` — 从授权原片与 SRT 到成片、封面和发布信息的完整工作流
-- `scripts/select_cover_frame.py` — 封面选帧（抽帧 + 图像统计打分）
-- `scripts/gen_jimeng_cover_prompts.py` — 即梦图生图封面提示词生成（3:4 + 4:3 两段）
-- `scripts/validate_publication_info.py` — 发布信息校验（标题≤25字 + 恰好5个话题词）
-- `references/cover-publish.md` — 封面/发布信息流完整契约（即梦用法/底图标准/坑）
-- `scripts/edit/alan_edit.py` — 剪辑流水线统一入口（init/script/voice/align/shots/match/render/all/status）
+- `references/peiyin-voice-contract.md` — **配音主契约**：dianying 管线命令、锁定参数、人名连读等读法约定、交付前核对
+- `scripts/synthesize_alan_cpu.py` — 本地 GPT-SoVITS 克隆音色配音（CPU，语速 1.0，离线退路）
+- `references/voiceover-workflow.md` — 本地 GPT-SoVITS 配音契约
+- `scripts/edit/alan_edit.py` — 剪辑流水线统一入口（init/script/voice/align/shots/match/render/cover/all/status）
 - `scripts/edit/{read_script,align_voice,shot_table,match_edl,render_edl,voiceover}.py` — 剪辑六步
 - `references/edit-pipeline.md` — 剪辑流完整契约（算法血统/长句拆槽/三档精度/已知限制）
+- `scripts/edit/publish.py` — 封面 + 发布信息（调 `vendor/fengmian`）
+- `vendor/fengmian/README.md` — 封面与发布信息的规格、风格预设、交付门禁
+- `scripts/select_cover_frame.py` — 早期封面选帧（抽帧 + 图像统计打分，仅作参考图用）
+- `scripts/gen_jimeng_cover_prompts.py` — 早期即梦封面提示词模板（已被 publish.py 取代）
+- `scripts/validate_publication_info.py` — 早期发布信息校验（5 话题，新链路用 fengmian 的 4 话题）
+- `references/cover-publish.md` — 早期封面/发布契约
+- `vendor/ffmpeg-skill` — 剪辑执行层（MIT，commit 见 `vendor/README.md`）
+- `vendor/movie-narrator` — 匹配算法参考（AGPL-3.0，只借鉴实现未复制代码）
+- `vendor/fengmian` — 发布层（MIT，commit 见 `vendor/README.md`）
 - `vendor/ffmpeg-skill` — 剪辑执行层（MIT，commit 见 `vendor/README.md`）
 - `vendor/movie-narrator` — 匹配算法参考（AGPL-3.0，只借鉴实现未复制代码）
