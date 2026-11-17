@@ -1,6 +1,10 @@
 __pycache__/
 *.pyc
-<<<<<<< HEAD
+
+# 质检 / 本地 profile（本机生成，含路径信息，不入库）
+*.quality.json
+voicestudio-profile.json
+*_segments/
 
 # 第三方依赖：整体不入库，只保留 vendor/README.md 里的版本记录
 vendor/*
@@ -10,12 +14,6 @@ vendor/*
 films/
 build/
 
-# 自测/临时目录
+# 自测 / 临时目录
 .tmp_*/
 *.fcpxml
-=======
-*.quality.json
-voicestudio-profile.json
-*_segments/
-vendor/
->>>>>>> origin/main
