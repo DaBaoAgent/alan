@@ -7,7 +7,7 @@ Alan 的第六件套之外，补上了从"成稿 + 配音"到"成片"的那一�
    │  read_script.py          句级切分 + TTS 分段
    ▼
 build/segments.json + build/配音稿.txt
-   │  voiceover.py            调外部 PeiYin（默认）或本地 GPT-SoVITS
+   │  voiceover.py            调 PeiYin dianying 管线（默认，参数见 references/peiyin-voice-contract.md）
    ▼
 配音.wav
    │  align_voice.py          ASR 词时间 ↔ 稿子字符流全局对齐
@@ -72,8 +72,8 @@ python scripts\edit\alan_edit.py all --work ... --run
 1. **长句拆槽**。Alan 一句 8~18s，电影镜头均 3~6s。原实现一句只配一镜，靠 1.25 倍变速
    硬撑，长句必然超速。这里先按标点把长句切 `k = ceil(句长 / --max-slot)` 个子槽，每槽独立
    选镜，并要求同句内源时间递增，于是 18s 的一句话落到 3~4 个连续镜头，speed 仍在 ±15%。
-2. **句间停顿吸收**。配音里句间有 0.18s、段间 0.35s、场景间 1.0s 的静默，这些没有解说词
-   但画面不能停。把它们并入上一句最后一个槽（上限 `--absorb-gap`，默认 1.2s），
+2. **句间停顿吸收**。配音里的静默（dianying 直连：句间约 0.1s、段间约 0.2s；段落模式段间按 `--paragraph-gap-ms`）
+   没有解说词但画面不能停。把它们并入上一句最后一个槽（上限 `--absorb-gap`，默认 1.2s），
    否则片段累计比配音短，音画会一路累积错位。
 3. **叙事游标**。`--monotonic on`（默认）让期望位置取"解说进度"与"上一镜中点"的较大值，
    镜头只前进不倒退；纯时序打分时位置差按 18% 片长归一，避免复用惩罚盖过位置优势导致跳镜。
