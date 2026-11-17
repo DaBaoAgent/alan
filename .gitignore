@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
+<<<<<<< HEAD
 
 # 第三方依赖：整体不入库，只保留 vendor/README.md 里的版本记录
 vendor/*
@@ -12,3 +13,9 @@ build/
 # 自测/临时目录
 .tmp_*/
 *.fcpxml
+=======
+*.quality.json
+voicestudio-profile.json
+*_segments/
+vendor/
+>>>>>>> origin/main

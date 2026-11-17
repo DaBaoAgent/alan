@@ -1,163 +1,159 @@
-# Alan 电影解说工作台
+<!-- README-PROMO:START -->
+<p align="center">
+  <img src="assets/readme/hero.webp" alt="ALAN 艾伦：电影解说全流程工作台" width="100%" />
+  <img src="assets/readme/workflow.webp" alt="ALAN 工作流：选片、查重、写稿、配音、剪辑、封面发布" width="100%" />
+  <img src="assets/readme/beginner.webp" alt="ALAN 新手上手：选片、写稿、成片" width="100%" />
+</p>
+<!-- README-PROMO:END -->
 
-面向 B 站 / 抖音电影解说账号「艾伦」的**工业化生产线**：选片查重 → 写口播稿 → 配音 → 剪辑成片 → 封面与发布信息。
+# ALAN 艾伦 — 电影解说全流程工作台
 
-不是"一键生成解说视频"的黑盒。稿子由人写、音色由固定克隆音色合成、画面由剪辑决策表（EDL）精确驱动，每一步的中间产物都是可读、可改、可重跑的 JSON。
+B站/抖音电影解说 UP 主「艾伦」的全流程生产线：**选片 → 查重 → 写口播稿 → 校验 → 配音 → 剪辑成片 → 封面发布**。
 
-- 稿子：艾伦亲笔风格，6 件套结构，3800–5200 字
-- 配音：默认调外部 PeiYin 项目（本地 `D:\@kaifa\PeiYin`，可用 `--peiyin-root` 改）的 dabao 克隆音色，也可退回本地 GPT-SoVITS
-- 剪辑：自建匹配层做"句 → 镜头"决策，[ffmpeg-skill] 做纯执行
-- 成片：1920×1080 / 30fps / H.264 / -14 LUFS / -1 dBTP，硬字幕
+不是"一键生成解说视频"的黑盒：稿子由人写，音色由固定克隆音色合成，画面由剪辑决策表（EDL）精确驱动，每一步的中间产物都是可读、可改、可重跑的 JSON。
+
+<p align="center">
+  <img src="https://img.shields.io/badge/频道定位-全网首发-FF2449" alt="Position">
+  <img src="https://img.shields.io/badge/目标-200%20部全网首发-6B4EFF" alt="Goal">
+  <img src="https://img.shields.io/badge/已解说库-82%20部-3776AB" alt="Library">
+  <img src="https://img.shields.io/badge/Agent%20Skill-Codex%20%7C%20Claude%20Code%20%7C%20Hermes-2ea44f" alt="Skill">
+  <img src="https://img.shields.io/badge/license-MIT-2ea44f" alt="License">
+</p>
+
+**频道定位**：**全网首发**冷门经典恐怖 / 铅黄（Giallo）/ 剥削（B 级）片，目标 200 部全网首发。
+文风与选片标准全部从艾伦亲笔的 **63 篇解说稿**逐条提炼。
 
 ---
 
-## 流水线
+## 何时使用
+
+| 说法 | 触发流程 |
+|---|---|
+| "帮我选片 / 推荐一部没解说过的恐怖片" | 选片流 |
+| "写解说稿 / 按艾伦风格写一篇" | 写稿流 |
+| "这部片艾伦解说过吗" | 查重 |
+| "配音 / 合成语音 / 克隆音色读稿" | 配音流 |
+| "剪辑 / 配画面 / 把这篇稿做成成片" | 剪辑流（精细版） |
+| "快速粗剪 / 先出一版看看" | 剪辑流（轻量版） |
+| "生成封面 / 发布信息" | 封面发布流 |
+
+---
+
+## 一、选片标准
+
+1. **题材范围**：意大利/西班牙铅黄 Giallo、70-80 年代 B 级恐怖、剥削片、Hammer 吸血鬼、slasher、冷门科幻恐怖；延伸经典恐怖/惊悚/夺宝探险/西部。
+2. **硬性调性**：**女主颜值/身材必须在线**，裸露戏份是加分项。
+3. **全网首发**：中文区没人完整解说过。选片必须 ① 跑 `scripts/check_done.py` 查已解说库 ② 豆瓣查是否有评分/是否已有 UP 主解说。
+4. **质量底线**：IMDB 先筛演员（个人评分 5+）保证下限，再筛导演（导演评分 8+）保证上限。
+5. **片源可得性**：能找到蓝光/修复版生肉。
+6. **系列补拍机会**：已做续集的可以回头做第一部。
+
+---
+
+## 二、解说稿文风规范
+
+### 结构模板（6 件套）
+
+1. **开场钩子**：2-4 句名场面白描，短句堆叠悬念，**不能第一句就报片名**。钩子段角色一律匿名（用"女孩/小伙"指代）。
+2. **影片信息段**："今天艾伦的全网首发/细读经典，带来 [年份]年上映的[国家][类型]《片名》……" —— 卡司只报【女主】+【男主】，配角一律不报名字。
+3. **正片解说**：第三人称逐场景叙事，短句为主、一句一行，人物用外号。
+4. **结尾句**："好了 电影结束"。
+5. **点评段**：≤100 字，槽点半句 + 亮点半句 + 烂片指数或分数收尾。
+6. **互动+签名**：互动 + 固定签名 **"我是艾伦 一个[当期梗]的阿婆 好了 我要去遛狗了 下期更精彩哦"**。
+
+### 开场美女钩子规律（63 篇实测）
+
+频道钩子 = **美色开路**。63 篇中开头两句内含美色招牌的约 32 篇（每 2 篇就有 1 篇）：
+
+- **机制 A：场景美色钩** —— 梳妆/更衣/泳装型、身体慢镜+偷窥型、情色张力+险型。**铁律**：美色镜头最多 2-4 句，第 3-5 句必须"变"（危险逼近/悬念/意外）。
+- **机制 B：信息段女色招牌** —— 第一句直接砸女色标签（女星头衔句式 / 阵容密度句式 / 擦边预告句式）。
+
+### 语言特征
+
+- 短句一行一句，口语感叹词：好家伙/哎呀/我的天/乖乖/噗呲/咔咔
+- **叙述一律第三人称**，角色台词转述为间接引语
+- **血腥黑话**：番茄酱/番茄汁 = 血；死亡动词一律隐晦（嗝屁/归西/没了/挂了/领盒饭…）；**"杀手"名词可用**
+- **角色命名法**：男主 = 玛德，男二 = 法克，男三 = 谢特；女主 = 侯丽，女二 = 幂幂
+- **裸露尺度词**：禁直白词，一律用"你们都懂的原因""能给的都给了""多豁得出去"
+
+### 字数纪律
+
+- 成稿目标 **3800–5200 字**（63 篇中位≈4300），硬界 2500–8000
+- 开场钩子 **60–110 字**
+
+---
+
+## 三、全流程
 
 ```
 选片 ──► 写稿 ──► 校验 ──► 配音 ──► 对齐 ──► 镜头表 ──► 匹配 ──► 渲染 ──► 封面/发布
  │        │        │        │         │          │          │         │
-查重   6件套    结构与      PeiYin   句级时间   切点检测   生成EDL   ffmpeg-skill
-     黑话密度   签名        GPT-     timeline   shots.json  edl.json   project.json
-                           SoVITS                                        │
-                                                                     final.mp4
+查重   6件套    结构与    PeiYin /  句级时间   切点检测   生成 EDL  ffmpeg-skill
+     黑话密度   签名      VoiceStudio timeline  shots.json  edl.json   project.json
+                                    / GPT-SoVITS                        │
+                                                                    final.mp4
 ```
 
-六个剪辑步骤一一对应 `scripts/edit/` 下的六个脚本，也可用 `alan_edit.py` 统一调度。
+### 1. 选片
 
-## 目录结构
-
-```
-Alan/
-├── SKILL.md                    技能主入口：选片标准 / 文风规范 / 各流程入口
-├── scripts/
-│   ├── edit/                   剪辑流水线（本仓库核心）
-│   │   ├── alan_edit.py        统一 CLI：init / script / voice / align / shots / match / render / all / status
-│   │   ├── common.py           编码探测、ffprobe、时间格式、文本清洗
-│   │   ├── read_script.py      口播稿 → 句级 segments.json + TTS 分段稿
-│   │   ├── voiceover.py        配音（PeiYin / 本地 GPT-SoVITS）
-│   │   ├── align_voice.py      配音 → 句级 timeline.json + SRT
-│   │   ├── shot_table.py       原片 → shots.json（可选 VLM 画面描述）
-│   │   ├── match_edl.py        匹配 → edl.json
-│   │   └── render_edl.py       edl → ffmpeg-skill project.json → final.mp4
-│   ├── check_done.py           已解说库查重
-│   ├── select_next.py          候选池过滤
-│   ├── validate_script.py      6 件套 / 签名 / 黑话密度校验
-│   ├── synthesize_alan_cpu.py  本地 GPT-SoVITS 克隆音色配音
-│   ├── select_cover_frame.py   封面选帧
-│   ├── gen_jimeng_cover_prompts.py  即梦图生图封面提示词
-│   └── validate_publication_info.py 发布信息校验
-├── references/
-│   ├── edit-pipeline.md        剪辑流完整契约（算法血统 / 精度 / 限制）
-│   ├── voiceover-workflow.md   配音流契约（参考音色 / 停顿 / 门禁）
-│   └── cover-publish.md        封面与发布契约
-├── vendor/                     只读依赖，不入库，版本见 vendor/README.md
-│   ├── ffmpeg-skill/           剪辑执行层（MIT）
-│   └── movie-narrator/         匹配算法参考（AGPL-3.0，未复制代码）
-├── films/                      片目录（不入库）
-└── .gitignore
+```bash
+python scripts/check_done.py "候选片名"          # 查重（支持中/英/别名模糊匹配）
+python scripts/select_next.py <candidate.json>   # 批量过滤候选池
 ```
 
-## 环境与安装
+### 2. 写稿
 
-**必需**
-
-| 依赖 | 版本 | 说明 |
-|---|---|---|
-| Windows | 10/11 | PowerShell 7（`pwsh`） |
-| Python | 3.11–3.13 | 只用标准库即可跑通全链路 |
-| ffmpeg | ≥ 9.0 | 需要 `scdet` 滤镜与 `-fps_mode`（`-vsync` 已移除） |
-
-**可选（决定精度，见下节）**
-
-| 依赖 | 用途 | 装法 |
-|---|---|---|
-| `faster-whisper` | 配音强制对齐（替代 rough） | `pip install faster-whisper` |
-| `whisperx` | 更高精度对齐 | `pip install whisperx` |
-| `scenedetect[opencv]` | 更准的镜头切点 | `pip install "scenedetect[opencv]"` |
-| `sentence-transformers` | 画面语义向量匹配 | `pip install sentence-transformers` |
-
-**vendor 依赖**
-
-```powershell
-git clone --depth 1 https://github.com/kajisho5/ffmpeg-skill.git vendor/ffmpeg-skill
-git -C vendor/ffmpeg-skill checkout f1c97cbffeac71b8fdfca2f790ceb00db3bcce65
-git clone --depth 1 https://github.com/zcbacxc/movie-narrator.git vendor/movie-narrator
-git -C vendor/movie-narrator checkout 4c7e81fedb9a0eec72257b15774a2bf5e2f2dd96
-# 删掉嵌套 .git，否则会被当成嵌套仓库
-Remove-Item -LiteralPath vendor\ffmpeg-skill\.git, vendor\movie-narrator\.git -Recurse -Force
+```bash
+python scripts/validate_script.py <稿.txt>   # 校验 6 件套 + 签名格式 + 黑话密度
 ```
 
-版本与边界说明见 [`vendor/README.md`](vendor/README.md)。
+### 3. 配音
 
-## 快速开始
+三个后端，产物统一为 `<片目录>/配音.wav`，下游不关心是谁合成的：
 
-```powershell
-# 1) 建片目录：稿子复制、原片/配音硬链接（同盘不占空间）
-python scripts\edit\alan_edit.py init --name 血之海滩 --script 稿.txt --video 原片.mp4
+```bash
+# 默认：外部 PeiYin 项目（dabao 克隆音色，段间停顿 / 质检门禁都在那边）
+python scripts/edit/alan_edit.py voice --work "<片目录>" --backend peiyin
 
-# 2) 一条链跑完：读稿 → 配音 → 对齐 → 镜头 → 匹配 → 出片
-python scripts\edit\alan_edit.py all --work "D:\@kaifa\Alan\films\血之海滩" --backend peiyin --run
+# 备选：VoiceStudio 本地 profile（首次先 clone 出 profile）
+python scripts/voicestudio_alan.py health
+python scripts/voicestudio_alan.py clone --work-dir "<项目>/音色"
+python scripts/voicestudio_alan.py synthesize --voice "<profile-id>" --text "<解说稿>" --output "<项目>/配音/大宝解说.wav"
 
-# 3) 查看进度
-python scripts\edit\alan_edit.py status --work "D:\@kaifa\Alan\films\血之海滩"
-```
-
-`all` 会跳过已存在的中间产物（`--force-voice` / `--force-shots` 可强制重跑）。只想看匹配结果不出片，`--steps script,voice,align,shots,match`。
-
-## 各环节
-
-### 选片
-
-```powershell
-python scripts\check_done.py "候选片名"          # 已解说库里是否已有
-python scripts\select_next.py candidate.json      # 候选池批量过滤
-```
-
-选片先看女主（颜值身材是频道卖点），再看导演，最后看冷门度。无豆瓣评分 = 冷门加分；搜站确认无人解说。
-
-### 写稿
-
-按 6 件套起草：钩子 → 信息段 → 正片 → 「好了 电影结束」→ 点评（≤100 字）→ 互动 + 签名。
-签名定版：`我是艾伦 一个[当期梗]的阿婆 好了 我要去遛狗了 下期更精彩哦`。
-
-```powershell
-python scripts\validate_script.py 稿.txt          # 6 件套 / 签名 / 黑话密度
-```
-
-暴力描写一律隐晦：拟声词 + 结果 + 「番茄汁 / 番茄酱」收尾，不写解剖细节。
-
-### 配音
-
-```powershell
-# 默认：外部 PeiYin 项目
-python scripts\edit\alan_edit.py voice --work <片目录> --backend peiyin
-
-# 退回本地 GPT-SoVITS（speed 固定 1.0）
-python scripts\edit\alan_edit.py voice --work <片目录> --backend alan
-
-# 配音已存在，只做校验
-python scripts\edit\alan_edit.py voice --work <片目录> --backend none
+# 退路：本地 GPT-SoVITS（CPU，语速固定 1.0）
+python scripts/edit/alan_edit.py voice --work "<片目录>" --backend alan
 ```
 
 PeiYin 路径默认 `D:\@kaifa\PeiYin`，可用 `--peiyin-root` 或环境变量 `PEIYIN_ROOT` 覆盖。
-产物统一为 `<片目录>/配音.wav`，下游不关心是谁合成的。
+VoiceStudio 的 profile 与质检记录不入库（见 `.gitignore`），流程见 `references/voicestudio-workflow.md`。
 
-### 剪辑
+### 4. 剪辑
 
-```powershell
+**精细版（推荐）：`scripts/edit/`** —— 配音强制对齐 + 句级语义/时序匹配 + 长句拆槽。
+
+```bash
+# 建片目录（稿子复制、原片/配音硬链接，同盘不占空间）
+python scripts/edit/alan_edit.py init --name 片名 --script 稿.txt --video 原片.mp4
+
+# 一条链：读稿 → 配音 → 对齐 → 镜头 → 匹配 → 出片
+python scripts/edit/alan_edit.py all --work "D:\@kaifa\Alan\films\片名" --backend peiyin --run
+
 # 分步
-python scripts\edit\alan_edit.py script --work <片目录>
-python scripts\edit\alan_edit.py align  --work <片目录> --backend auto
-python scripts\edit\alan_edit.py shots  --work <片目录> --backend auto
-python scripts\edit\alan_edit.py match  --work <片目录>
-python scripts\edit\alan_edit.py render --work <片目录> --csv --run
+python scripts/edit/alan_edit.py script --work <片目录>
+python scripts/edit/alan_edit.py align  --work <片目录> --backend auto
+python scripts/edit/alan_edit.py shots  --work <片目录> --backend auto
+python scripts/edit/alan_edit.py match  --work <片目录>
+python scripts/edit/alan_edit.py render --work <片目录> --csv --run
+
+# 查看进度
+python scripts/edit/alan_edit.py status --work <片目录>
 ```
 
 关键参数：
 
 | 命令 | 参数 | 作用 |
 |---|---|---|
-| `align` | `--backend auto\|whisperx\|faster\|rough` | 对齐后端，`auto` 逐级降级 |
+| `align` | `--backend auto\|whisperx\|faster\|rough` | 对齐后端，逐级降级 |
 | `align` | `--model medium` | ASR 模型，中文解说建议 medium 起 |
 | `shots` | `--scd-threshold 12` | ffmpeg 场景分数阈值（真实电影 10~15，静态素材 3~5） |
 | `shots` | `--caption-backend openai` | 让 VLM 给每个镜头写 40 字画面描述 |
@@ -168,15 +164,32 @@ python scripts\edit\alan_edit.py render --work <片目录> --csv --run
 | `render` | `--font-size 20` | ASS points，1080p 实际字高 ≈ size×3.75 |
 | `render` | `--export-timeline edit.fcpxml` | 导出时间线进 Premiere / Resolve 返工 |
 
-### 封面与发布
+**轻量版：`auto_edit_movie.py`** —— PySceneDetect 切镜头，按剧情时间顺序生成初剪计划，人工逐条审核后渲染。适合快速看一版，不做句级语义匹配。
 
-```powershell
-python scripts\select_cover_frame.py 原片.mp4 --times 120,140,160
-python scripts\gen_jimeng_cover_prompts.py --movie 片名 --out 片目录\封面\封面提示词-即梦.txt
-python scripts\validate_publication_info.py 片目录
+```bash
+python -m pip install -r requirements-movie-edit.txt
+python scripts/auto_edit_movie.py detect-scenes --video "<原片>" --output "<项目>/剪辑/镜头.json"
+python scripts/auto_edit_movie.py first-cut --source-video "<原片>" --narration "<配音>" --scenes "<项目>/剪辑/镜头.json" --output "<项目>/剪辑/初剪计划.json"
+python scripts/auto_edit_movie.py render --plan "<项目>/剪辑/初剪计划.json" --subtitle "<项目>/字幕/解说字幕.srt" --output "<项目>/成片/片名_解说.mp4"
 ```
 
-## 片目录与数据契约
+两条路径怎么选：要"解说讲到哪、画面就到哪"用精细版；只想把镜头按时序铺一版、后面手工大改用轻量版。
+
+### 5. 封面 / 发布信息
+
+```bash
+python scripts/select_cover_frame.py <源片> --times <秒,...>    # 抽候选帧并打分
+python scripts/gen_jimeng_cover_prompts.py --movie <片名> --out <片目录>/封面/封面提示词-即梦.txt
+python scripts/validate_publication_info.py <片目录>            # 标题≤25字 + 恰好5个话题词
+```
+
+封面标准 = 金发碧眼美女主体 + **仅一个大大的手写体电影名**（无其他文字），3:4 竖版 + 4:3 横版两段。
+
+---
+
+## 四、剪辑流水线详解
+
+### 片目录与数据契约
 
 ```
 films/<片名>/
@@ -185,7 +198,7 @@ films/<片名>/
 ├── 原片.mp4
 ├── final.mp4            # 成片（根目录只放交付物）
 ├── film.json
-└── build/               # 全部中间产物，可随时删掉重算
+└── build/               # 中间产物，删掉可随时重算
     ├── segments.json    句级切分 + TTS 分段
     ├── 配音稿.txt        送 TTS 的段落稿（≤120 字 / 段）
     ├── voice.json
@@ -210,9 +223,9 @@ films/<片名>/
 | `shot` / `score` / `source` | 命中的镜头号 / 语义分 / 打分来源 |
 | `expanded` | 是否因 clamp 扩/缩过窗口（可能跨切点） |
 
-## 匹配精度分级（重要）
+### 匹配精度分级（重要）
 
-`match` 会按可用信号自动选档，实际用了哪档写在 `edl.json` 的 `stats.scorer`：
+`match` 按可用信号自动选档，实际用了哪档写在 `edl.json` 的 `stats.scorer`：
 
 | 档位 | 条件 | 含义 |
 |---|---|---|
@@ -222,10 +235,10 @@ films/<片名>/
 
 **想要"精准配画面"，必须先补两件事**：
 
-```powershell
+```bash
 # ① 给每个镜头写画面描述（覆盖率 <70% 会自动退回 temporal）
-python scripts\edit\alan_edit.py shots --work <片目录> --caption-backend openai `
-  --caption-base-url $env:ALAN_VLM_BASE_URL --caption-key $env:ALAN_VLM_KEY
+python scripts/edit/alan_edit.py shots --work <片目录> --caption-backend openai \
+  --caption-base-url $ALAN_VLM_BASE_URL --caption-key $ALAN_VLM_KEY
 
 # ② 装向量模型，让描述真正参与匹配
 pip install sentence-transformers
@@ -233,9 +246,9 @@ pip install sentence-transformers
 
 同理，`align` 的 `rough` 只用于跑通结构，正式出片要装 `faster-whisper`（±0.5s 以上的漂移会让画面提前或滞后）。
 
-## 匹配算法
+### 算法与三处改造
 
-血统是 [`movie-narrator`](vendor/movie-narrator) 的 `pipeline/match`，保留四条：act 分区（0.15 / 0.25 / 0.40 / 0.20）、贪心 topk + 复用惩罚、窗口 clamp、滑动窗口多样性换镜。
+血统是 [`movie-narrator`](vendor/README.md) 的 `pipeline/match`，保留四条：act 分区（0.15 / 0.25 / 0.40 / 0.20）、贪心 topk + 复用惩罚、窗口 clamp、滑动窗口多样性换镜。
 
 针对电影解说改了三处：
 
@@ -243,15 +256,15 @@ pip install sentence-transformers
 2. **句间停顿吸收** —— 句间 0.18 s、段间 0.35 s、场景间 1.0 s 没有解说词但画面不能停，并入上一句尾槽，否则片段累计比配音短、音画一路错位。
 3. **叙事游标** —— 期望位置取"解说进度"与"上一镜中点"的较大值，镜头只前进不倒退；纯时序打分时位置差按 18% 片长归一，避免复用惩罚盖过位置优势导致跳镜（实测会 0→1→0→2）。
 
-## 设计取舍：为什么是"自建匹配层 + ffmpeg-skill 执行"
+### 为什么是"自建匹配层 + ffmpeg-skill 执行"
 
-- `ffmpeg-skill` 是**纯执行层**，其文档原文 "does not reason, plan, decide"，`scenes.py --highlights` 也明写 "ranks by loudness, not meaning"——它不会按解说语义选画面。
-- `movie-narrator` 有 `detect_scenes → match_clips` 与时间线导出，但自产稿、自 TTS，且一句一镜、无长句拆槽。
+- `ffmpeg-skill` 是**纯执行层**，文档原文 "does not reason, plan, decide"，`scenes.py --highlights` 也明写 "ranks by loudness, not meaning"——它不会按解说语义选画面。
+- `movie-narrator` 有 `detect_scenes → match_clips`，但自产稿、自 TTS，且一句一镜、无长句拆槽。
 - 现成的"人写稿 + 人配音 + 精准配画面"产品，市面上没有。
 
 所以：稿与配音留在本地生产管线，画面决策自建（`match_edl.py`），执行交给成熟的 `ffmpeg-skill`，返工走 `--export-timeline`。
 
-## 成片规格
+### 成片规格
 
 | 项 | 值 |
 |---|---|
@@ -260,44 +273,127 @@ pip install sentence-transformers
 | 字幕 | 句级 SRT → 硬字幕，白字黑描边，底部居中，最多 2 行，`Microsoft YaHei` |
 | 转场 | 默认无（fade 0.5 会吃掉每个切口 0.5 s，总长就对不上配音） |
 
-## 已知限制
+---
 
-- **对齐**：无 ASR 时 `rough` 按字数比例切，只能用来跑通结构。
-- **镜头检测**：pyscenedetect 未装时用 ffmpeg `scdet`；暗场切换可能漏检（漏检只让镜头偏长，不毁 EDL）。
-- **字幕字体**：Windows 默认 `Microsoft YaHei`；换字体需确认系统已安装，否则中文变方块。
-- **配音静音**：`loudness.py` 会拒绝处理静音轨（这是正确行为）。真实配音不会遇到；用静音 wav 做占位测试时，质检会判 `loudness FAIL`，属于预期。
-- **许可**：`vendor/movie-narrator` 为 AGPL-3.0，本项目只借鉴算法思路、未复制其代码；`vendor/ffmpeg-skill` 为 MIT。
+## 五、环境与安装
 
-## 常见问题
+**必需**
 
-**成片比配音短/长？** 检查 `match` 的 `--absorb-gap`（默认 1.2 s）是否能覆盖句间与场景停顿；`edl.json` 的 `warnings` 会写"留白 x s，画面会比配音短"。
+| 依赖 | 版本 | 说明 |
+|---|---|---|
+| Windows | 10/11 | PowerShell 7（`pwsh`） |
+| Python | 3.11–3.13 | 精细剪辑链路只用标准库即可跑通 |
+| ffmpeg | ≥ 9.0 | 需要 `scdet` 滤镜与 `-fps_mode`（`-vsync` 已移除） |
 
-**所有片段的 speed 都是 1.25？** 说明原片镜头普遍长于单槽（如 11 s 镜头配 5 s 槽），clamp 只能收缩到 1.25。真实素材镜头均 3~6 s 时 speed 会接近 1.0。
+**可选（决定精度）**
 
-**渲染报 `loudness FAIL`？** loudnorm 的 linear 模式在真峰值受限时会欠调 1~2 dB；`render_edl.py` 会自动补跑一次校准，仍失败则手工 `loudness.py -I -14 --tp -1`。
+| 依赖 | 用途 | 装法 |
+|---|---|---|
+| `faster-whisper` | 配音强制对齐（替代 rough） | `pip install faster-whisper` |
+| `whisperx` | 更高精度对齐 | `pip install whisperx` |
+| `scenedetect[opencv]` | 更准的镜头切点（轻量版必需） | `pip install "scenedetect[opencv]"` |
+| `sentence-transformers` | 画面语义向量匹配 | `pip install sentence-transformers` |
 
-**字幕太大/太小？** `caption.py` 的 `--size` 按 288p 脚本缩放，1080p 实际字高 ≈ size×3.75。20 ≈ 75 px。
-
-**`ffmpeg` 报 `Unrecognized option 'vsync'`？** ffmpeg 9 已移除该参数，本仓库统一用 `-fps_mode passthrough`，升级脚本即可。
-
-## 开发与自测
-
-- 纯标准库可跑通全链路，重依赖全部 `try import` 降级，不会因缺包直接崩。
-- 自测素材可用 ffmpeg 合成：多段纯色视频 + `anullsrc`/`sine` 配音，分别验切点、拆槽、音量与字幕。
-- 代码约定：中间产物一律 JSON + UTF-8，编码读取必须探测（老稿 GBK / UTF-8+BOM 混用）；所有时间用秒（float），只在写 ffmpeg 参数时转 `m:ss.mmm`。
+**vendor 依赖**
 
 ```powershell
-# 语法自检
-python -m py_compile (Get-ChildItem scripts\edit -Filter *.py).FullName
+git clone --depth 1 https://github.com/kajisho5/ffmpeg-skill.git vendor/ffmpeg-skill
+git -C vendor/ffmpeg-skill checkout f1c97cbffeac71b8fdfca2f790ceb00db3bcce65
+git clone --depth 1 https://github.com/zcbacxc/movie-narrator.git vendor/movie-narrator
+git -C vendor/movie-narrator checkout 4c7e81fedb9a0eec72257b15774a2bf5e2f2dd96
+# 删掉嵌套 .git，否则会被当成嵌套仓库
+Remove-Item -LiteralPath vendor\ffmpeg-skill\.git, vendor\movie-narrator\.git -Recurse -Force
 ```
 
-## 依赖与许可
-
-- 本仓库未附 LICENSE 文件。
-- `vendor/ffmpeg-skill`：MIT。
-- `vendor/movie-narrator`：AGPL-3.0（详见 [`vendor/README.md`](vendor/README.md)）。
-- 解说稿、配音、封面素材的版权与平台规则由使用者自行负责。
+版本、许可与边界见 [`vendor/README.md`](vendor/README.md)。
 
 ---
 
-[ffmpeg-skill]: vendor/README.md
+## 六、目录结构
+
+```
+Alan/
+├── README.md                   本文件
+├── SKILL.md                    技能主入口：选片标准 / 文风规范 / 各流程入口
+├── assets/readme/              README 配图
+├── requirements-movie-edit.txt 轻量版粗剪依赖
+├── scripts/
+│   ├── edit/                   精细剪辑流水线（本仓库核心）
+│   │   ├── alan_edit.py        统一 CLI：init / script / voice / align / shots / match / render / all / status
+│   │   ├── common.py           编码探测、ffprobe、时间格式、文本清洗
+│   │   ├── read_script.py      口播稿 → 句级 segments.json + TTS 分段稿
+│   │   ├── voiceover.py        配音（PeiYin / 本地 GPT-SoVITS）
+│   │   ├── align_voice.py      配音 → 句级 timeline.json + SRT
+│   │   ├── shot_table.py       原片 → shots.json（可选 VLM 画面描述）
+│   │   ├── match_edl.py        匹配 → edl.json
+│   │   └── render_edl.py       edl → ffmpeg-skill project.json → final.mp4
+│   ├── auto_edit_movie.py      轻量粗剪：镜头检测 / 初剪计划 / 渲染
+│   ├── voicestudio_alan.py     VoiceStudio 本地克隆 profile 与配音质检
+│   ├── check_done.py           已解说库查重
+│   ├── select_next.py          候选池过滤
+│   ├── validate_script.py      6 件套 / 签名 / 黑话密度校验
+│   ├── synthesize_alan_cpu.py  本地 GPT-SoVITS 克隆音色配音
+│   ├── select_cover_frame.py   封面选帧
+│   ├── gen_jimeng_cover_prompts.py  即梦图生图封面提示词
+│   └── validate_publication_info.py 发布信息校验
+├── references/
+│   ├── edit-pipeline.md        精细剪辑流完整契约（算法 / 精度 / 限制）
+│   ├── auto-edit-workflow.md   轻量粗剪全流程
+│   ├── voicestudio-workflow.md VoiceStudio 配音契约
+│   ├── voiceover-workflow.md   GPT-SoVITS 配音契约
+│   └── cover-publish.md        封面与发布契约
+├── vendor/                     只读依赖，不入库，版本见 vendor/README.md
+├── films/                      片目录（不入库）
+└── .gitignore
+```
+
+---
+
+## 七、常见坑
+
+- **中文老片 txt 混合编码**：解说稿大部分 GBK、少数 UTF-8+BOM，读取必须自动探测，直接按 UTF-8 读会乱码。
+- 选片优先查**女主**（颜值身材是频道卖点），其次导演，其次冷门度。
+- 生肉片源翻译量大，写稿前确认原片已到手，别对着 IMDB 简介编剧情。
+- **暴力描写一律隐晦**：不写解剖细节，套路 = 拟声词 + 结果 + 番茄酱收尾。
+- 评分制："烂片指数 10 分满分"时**分数越低越神**，别写反。
+
+**剪辑相关**
+
+- **成片比配音短/长**：检查 `match --absorb-gap`（默认 1.2 s）是否覆盖句间与场景停顿；`edl.json` 的 `warnings` 会写"留白 x s，画面会比配音短"。
+- **所有片段 speed 都是 1.25**：原片镜头普遍长于单槽（如 11 s 镜头配 5 s 槽），clamp 只能收缩到 1.25；真实素材镜头均 3~6 s 时会接近 1.0。
+- **渲染报 `loudness FAIL`**：loudnorm 的 linear 模式在真峰值受限时会欠调 1~2 dB，`render_edl.py` 会自动补跑一次校准；仍失败则手工 `loudness.py -I -14 --tp -1`。
+- **字幕太大/太小**：`caption.py` 的 `--size` 按 288p 脚本缩放，1080p 实际字高 ≈ size×3.75；20 ≈ 75 px。
+- **`Unrecognized option 'vsync'`**：ffmpeg 9 已移除该参数，统一用 `-fps_mode passthrough`。
+
+---
+
+## 八、参考文件
+
+| 文件 | 说明 |
+|---|---|
+| `SKILL.md` | 全部规则主入口（选片 / 文风 / 各流程） |
+| `scripts/done_movies.json` | 已解说 82 部电影索引（中/英名、年份、导演、女主） |
+| `scripts/check_done.py` | 查重脚本 |
+| `scripts/select_next.py` | 候选池过滤脚本 |
+| `scripts/validate_script.py` | 稿子结构校验脚本 |
+| `scripts/edit/alan_edit.py` | 精细剪辑统一入口（六步 + status） |
+| `scripts/edit/*.py` | 精细剪辑六步实现 |
+| `references/edit-pipeline.md` | 精细剪辑完整契约（算法血统 / 长句拆槽 / 三档精度 / 已知限制） |
+| `scripts/voicestudio_alan.py` | VoiceStudio 本地克隆 profile、长稿配音与音频质检 |
+| `references/voicestudio-workflow.md` | VoiceStudio 配音流程 |
+| `scripts/auto_edit_movie.py` | PySceneDetect 镜头检测、可审核初剪计划与 FFmpeg 成片渲染 |
+| `references/auto-edit-workflow.md` | 轻量粗剪全流程 |
+| `scripts/synthesize_alan_cpu.py` | GPT-SoVITS 克隆音色配音（CPU，语速 1.0） |
+| `references/voiceover-workflow.md` | GPT-SoVITS 配音契约（参考音色 / 质检门禁） |
+| `scripts/select_cover_frame.py` | 封面选帧（抽帧 + 图像统计打分） |
+| `scripts/gen_jimeng_cover_prompts.py` | 即梦图生图封面提示词（3:4 + 4:3） |
+| `scripts/validate_publication_info.py` | 发布信息校验（标题≤25字 + 恰好5个话题词） |
+| `references/cover-publish.md` | 封面 / 发布信息流完整契约 |
+
+---
+
+## License
+
+MIT
+
+第三方依赖各自按其许可：`vendor/ffmpeg-skill` 为 MIT，`vendor/movie-narrator` 为 AGPL-3.0（本项目只借鉴算法思路，未复制其代码）。解说稿、配音、封面素材的版权与平台规则由使用者自行负责。

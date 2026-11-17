@@ -1,0 +1,3 @@
+# Scene-aware automatic first cut for movie commentary.
+# BSD-3-Clause: https://github.com/Breakthrough/PySceneDetect
+scenedetect>=0.7,<0.8
